@@ -1,0 +1,318 @@
+{
+  "product": "company-dd",
+  "version": "0.1.0",
+  "updated": "2026-09-29T04:03:27+08:00",
+  "disclosure_policy": "本文件由 tools/refresh_data_sources.py 实测生成：每个源的 status/http_status 都来自一次真实请求。状态 ok 只代表本次探测可用，不代表字段完整。需要 Key 的源在未配置时如实标 needs_key，不静默省略。",
+  "summary": {
+    "total": 13,
+    "ok": 4,
+    "blocked": 5,
+    "needs_key": 3
+  },
+  "sources": [
+    {
+      "id": "cninfo",
+      "label": "巨潮资讯网（深交所指定披露平台）",
+      "kind": "official",
+      "jurisdiction": "CN",
+      "homepage": "https://www.cninfo.com.cn/",
+      "capabilities": [
+        "resolve",
+        "announcements",
+        "fulltext_search",
+        "listed_profile"
+      ],
+      "requires_key": "",
+      "note": "A股/港股上市公司官方公告渠道；非上市主体无数据。",
+      "access": "open",
+      "probe": {
+        "status": "ok",
+        "http_status": 200,
+        "url": "https://www.cninfo.com.cn/new/information/topSearch/query",
+        "detail": "接口正常，样例命中 1 条",
+        "checked_at": "2026-09-29T04:03:20+08:00"
+      }
+    },
+    {
+      "id": "eastmoney",
+      "label": "东方财富 F10 数据中心（第三方聚合）",
+      "kind": "aggregator",
+      "jurisdiction": "CN",
+      "homepage": "https://emweb.securities.eastmoney.com/",
+      "capabilities": [
+        "listed_profile",
+        "shareholders",
+        "financials"
+      ],
+      "requires_key": "",
+      "note": "聚合商，非官方源；字段默认 partial，需与公告交叉验证。",
+      "access": "open",
+      "probe": {
+        "status": "ok",
+        "http_status": null,
+        "url": "https://datacenter-web.eastmoney.com/api/data/v1/get",
+        "detail": "接口正常，样例字段 57 个",
+        "checked_at": "2026-09-29T04:03:21+08:00"
+      }
+    },
+    {
+      "id": "sec_edgar",
+      "label": "SEC EDGAR（美国证监会官方披露）",
+      "kind": "official",
+      "jurisdiction": "US",
+      "homepage": "https://www.sec.gov/edgar/search/",
+      "capabilities": [
+        "resolve",
+        "entity_profile",
+        "filings",
+        "financials"
+      ],
+      "requires_key": "",
+      "note": "官方源，免 Key；需声明 UA 并限速。",
+      "access": "open",
+      "probe": {
+        "status": "ok",
+        "http_status": null,
+        "url": "https://data.sec.gov/submissions/CIK0000320193.json",
+        "detail": "读通 Apple Inc. (CIK 320193)，ticker=['AAPL']",
+        "checked_at": "2026-09-29T04:03:21+08:00"
+      }
+    },
+    {
+      "id": "wikidata",
+      "label": "Wikidata（CC0 知识库）",
+      "kind": "third_party",
+      "jurisdiction": "GLOBAL",
+      "homepage": "https://www.wikidata.org/",
+      "capabilities": [
+        "resolve",
+        "identity",
+        "relations"
+      ],
+      "requires_key": "",
+      "note": "身份消歧与关联关系；字段可能滞后，不作工商凭证。",
+      "access": "open",
+      "probe": {
+        "status": "ok",
+        "http_status": null,
+        "url": "https://www.wikidata.org/w/api.php",
+        "detail": "接口正常，样例命中 1 条",
+        "checked_at": "2026-09-29T04:03:21+08:00"
+      }
+    },
+    {
+      "id": "official_cn",
+      "label": "中国官方渠道可达性（GSXT/信用中国/执行公开网/裁判文书网）",
+      "kind": "official",
+      "jurisdiction": "CN",
+      "homepage": "https://www.gsxt.gov.cn/",
+      "capabilities": [
+        "probe",
+        "manual_route"
+      ],
+      "requires_key": "",
+      "note": "这些站点对自动化流量有 WAF/验证码，工具只报可用性并给出人工入口。",
+      "access": "open",
+      "probe": {
+        "status": "unknown",
+        "http_status": null,
+        "url": "https://www.gsxt.gov.cn/",
+        "detail": "",
+        "checked_at": "2026-09-29T04:03:27+08:00"
+      }
+    },
+    {
+      "id": "opencorporates",
+      "label": "OpenCorporates（全球公司注册库）",
+      "kind": "keyed",
+      "jurisdiction": "GLOBAL",
+      "homepage": "https://opencorporates.com/",
+      "capabilities": [
+        "registry_lookup"
+      ],
+      "requires_key": "OPENCORPORATES_API_KEY",
+      "note": "免费公共接口常 401，配置 Key 后可用；覆盖境外主体。",
+      "access": "key_required",
+      "probe": {
+        "status": "needs_key",
+        "http_status": null,
+        "url": "https://opencorporates.com/",
+        "detail": "需要环境变量 OPENCORPORATES_API_KEY；未配置时该维度不采集。",
+        "checked_at": "2026-09-29T04:03:27+08:00"
+      }
+    },
+    {
+      "id": "devnors",
+      "label": "Devnors Data（中国企业数据聚合，需 Key）",
+      "kind": "keyed",
+      "jurisdiction": "CN",
+      "homepage": "https://data.devnors.com/",
+      "capabilities": [
+        "cn_registry",
+        "cn_judicial"
+      ],
+      "requires_key": "DEVNORS_API_KEY",
+      "note": "第三方聚合，数据授权口径未公开披露；字段默认 partial，需交叉验证。",
+      "access": "key_required",
+      "probe": {
+        "status": "needs_key",
+        "http_status": null,
+        "url": "https://data.devnors.com/",
+        "detail": "需要环境变量 DEVNORS_API_KEY；未配置时该维度不采集。",
+        "checked_at": "2026-09-29T04:03:27+08:00"
+      }
+    },
+    {
+      "id": "tianyancha_cli",
+      "label": "天眼查官方 CLI（tyc）",
+      "kind": "keyed",
+      "jurisdiction": "CN",
+      "homepage": "https://github.com/tyc-tech/tyc-cli",
+      "capabilities": [
+        "cn_registry",
+        "cn_judicial",
+        "cn_change_records"
+      ],
+      "requires_key": "TYC_TOKEN",
+      "note": "官方数据源，覆盖工商登记、经营异常、被执行/失信、行政处罚、变更记录；需商务授权。",
+      "access": "key_required",
+      "probe": {
+        "status": "needs_key",
+        "http_status": null,
+        "url": "https://github.com/tyc-tech/tyc-cli",
+        "detail": "未登录：tyc login（或 tyc init --authorization <KEY>），配置落在 /root/.tyc/config.json",
+        "checked_at": "2026-09-29T04:03:27+08:00"
+      }
+    },
+    {
+      "id": "gsxt",
+      "label": "国家企业信用信息公示系统",
+      "kind": "official",
+      "jurisdiction": "CN",
+      "homepage": "https://www.gsxt.gov.cn/index.html",
+      "capabilities": [
+        "manual_route"
+      ],
+      "requires_key": "",
+      "access": "human_only",
+      "note": "在首页搜索框输入企业全称，过滑块后核对「基础信息 / 经营异常 / 行政处罚 / 年报」。",
+      "probe": {
+        "status": "blocked",
+        "http_status": 521,
+        "url": "https://www.gsxt.gov.cn/",
+        "detail": "国家企业信用信息公示系统 拒绝了本次请求（HTTP 521）：该站点对非浏览器流量有 WAF/验证码拦截。 这不是「查不到」，而是「查不了」。该维度已进入未验证清单，结论不能判绿。 人工入口：https://www.gsxt.gov.cn/index.html 在首页搜索框输入企业全称，过滑块后核对「基础信息 / 经营异常 / 行政处罚 / 年报」。",
+        "checked_at": "2026-09-29T04:03:22+08:00"
+      }
+    },
+    {
+      "id": "credit_china",
+      "label": "信用中国",
+      "kind": "official",
+      "jurisdiction": "CN",
+      "homepage": "https://www.creditchina.gov.cn/xinyongfuwu/",
+      "capabilities": [
+        "manual_route"
+      ],
+      "requires_key": "",
+      "access": "human_only",
+      "note": "在「信用服务」里按企业名称查「行政处罚 / 失信记录 / 红黑名单」。",
+      "probe": {
+        "status": "blocked",
+        "http_status": 412,
+        "url": "https://www.creditchina.gov.cn/",
+        "detail": "信用中国 拒绝了本次请求（HTTP 412）：该站点对非浏览器流量有 WAF/验证码拦截。 这不是「查不到」，而是「查不了」。该维度已进入未验证清单，结论不能判绿。 人工入口：https://www.creditchina.gov.cn/xinyongfuwu/ 在「信用服务」里按企业名称查「行政处罚 / 失信记录 / 红黑名单」。",
+        "checked_at": "2026-09-29T04:03:24+08:00"
+      }
+    },
+    {
+      "id": "zxgk",
+      "label": "中国执行信息公开网",
+      "kind": "official",
+      "jurisdiction": "CN",
+      "homepage": "https://zxgk.court.gov.cn/",
+      "capabilities": [
+        "manual_route"
+      ],
+      "requires_key": "",
+      "access": "human_only",
+      "note": "分别在「被执行人 / 失信被执行人 / 限制消费」三个入口按企业名称检索。",
+      "probe": {
+        "status": "blocked",
+        "http_status": 403,
+        "url": "https://zxgk.court.gov.cn/",
+        "detail": "中国执行信息公开网 拒绝了本次请求（HTTP 403）：该站点对非浏览器流量有 WAF/验证码拦截。 这不是「查不到」，而是「查不了」。该维度已进入未验证清单，结论不能判绿。 人工入口：https://zxgk.court.gov.cn/ 分别在「被执行人 / 失信被执行人 / 限制消费」三个入口按企业名称检索。",
+        "checked_at": "2026-09-29T04:03:25+08:00"
+      }
+    },
+    {
+      "id": "wenshu",
+      "label": "中国裁判文书网",
+      "kind": "official",
+      "jurisdiction": "CN",
+      "homepage": "https://wenshu.court.gov.cn/",
+      "capabilities": [
+        "manual_route"
+      ],
+      "requires_key": "",
+      "access": "human_only",
+      "note": "登录后按当事人名称检索裁判文书，注意同名主体，按案号核对。",
+      "probe": {
+        "status": "blocked",
+        "http_status": 200,
+        "url": "https://wenshu.court.gov.cn/",
+        "detail": "首页可达（HTTP 200），但检索入口需要登录/验证码，本工具不代做验证码验证：该维度转人工清单。",
+        "checked_at": "2026-09-29T04:03:26+08:00"
+      }
+    },
+    {
+      "id": "court_announce",
+      "label": "人民法院公告网",
+      "kind": "official",
+      "jurisdiction": "CN",
+      "homepage": "https://rmfygg.court.gov.cn/",
+      "capabilities": [
+        "manual_route"
+      ],
+      "requires_key": "",
+      "access": "human_only",
+      "note": "按当事人名称检索开庭/送达公告。",
+      "probe": {
+        "status": "blocked",
+        "http_status": 200,
+        "url": "https://rmfygg.court.gov.cn/",
+        "detail": "首页可达（HTTP 200），但检索入口需要登录/验证码，本工具不代做验证码验证：该维度转人工清单。",
+        "checked_at": "2026-09-29T04:03:27+08:00"
+      }
+    }
+  ],
+  "not_included": [
+    {
+      "what": "验证码 / 滑块 / 登录墙绕过",
+      "why": "不做。被 WAF 拦住的官方站点转人工清单，工具只给入口和检索词。"
+    },
+    {
+      "what": "个人隐私数据（手机号机主、身份证、住址、开房记录等）",
+      "why": "不做。背调公司的边界是法人主体与公开司法信息，不碰自然人隐私数据。"
+    },
+    {
+      "what": "商业数据源的无授权转售或爬取",
+      "why": "不做。需要工商/司法深度字段时，走官方 CLI 或商业 API 并自带 Key。"
+    },
+    {
+      "what": "对官方站点的分布式抓取",
+      "why": "不做。对巨潮/SEC 等允许程序化访问的源按主机限速，其余一律转人工。"
+    }
+  ],
+  "evidence_policy": {
+    "field_status": [
+      "verified",
+      "partial",
+      "unverified",
+      "blocked",
+      "needs_key",
+      "not_applicable"
+    ],
+    "rule": "verified 字段必须带证据（来源+URL+抓取时间+sha256）；其余状态必须写明原因。",
+    "green_rule": "只有全部红线维度 status=clear 才可能判绿；任一红线 unverified，结论最高为黄。"
+  }
+}

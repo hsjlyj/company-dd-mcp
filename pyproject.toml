@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "company-dd"
+version = "0.1.0"
+description = "证据优先的企业背调 MCP：红线规则 + 未验证清单 + 可复核证据台账"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "company-dd" }]
+keywords = ["mcp", "due-diligence", "background-check", "osint", "公司背调"]
+dependencies = ["mcp>=2.0.0", "httpx>=0.27", "anyio>=4.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+company-dd = "company_dd.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/hsjlyj/company-dd-mcp"
+Repository = "https://github.com/hsjlyj/company-dd-mcp"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["company_dd*"]
+
+[tool.setuptools.package-data]
+company_dd = ["rules.json"]

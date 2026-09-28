@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+build/
+dist/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Runtime data: reports and raw evidence may contain company-specific data
+/data/
+
+# Editor/OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

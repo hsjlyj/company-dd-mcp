@@ -1,0 +1,144 @@
+{
+  "$comment": "machine-readable 红线规则。severity=red_line 直接影响结论颜色；warning 只提示。match 里的 patterns 对公告标题做不区分大小写正则匹配，threshold 为命中条数阈值。",
+  "version": "0.1.0",
+  "scopes": {
+    "announcements": "上市公司公告标题（cninfo 官方披露渠道）",
+    "filings": "SEC 申报清单",
+    "financials": "上市公司财务口径",
+    "registry": "工商登记（需官方渠道或 Key 源）",
+    "enforcement": "执行/失信（需官方渠道或 Key 源）"
+  },
+  "rules": [
+    {
+      "id": "RL-01",
+      "title": "被执行人 / 失信被执行人",
+      "severity": "red_line",
+      "scope": "enforcement",
+      "requires": ["official_cn:zxgk", "devnors:enterprise/exec_person", "devnors:enterprise/breach_of_trust"],
+      "patterns": [],
+      "expectation": "当前无在执案件、未被列入失信名单",
+      "manual_url": "https://zxgk.court.gov.cn/",
+      "why": "有在执案件说明已有生效判决未履行；失信名单是明确的履约能力/意愿信号。"
+    },
+    {
+      "id": "RL-02",
+      "title": "经营异常名录 / 吊销 / 注销",
+      "severity": "red_line",
+      "scope": "registry",
+      "requires": ["official_cn:gsxt", "devnors:enterprise/operation_except"],
+      "patterns": [],
+      "expectation": "登记状态为存续/在营，未列入经营异常名录",
+      "manual_url": "https://www.gsxt.gov.cn/index.html",
+      "why": "经营异常=登记住所失联或未按时公示年报，是主体失联的高危信号。"
+    },
+    {
+      "id": "RL-03",
+      "title": "近一年监管处罚（含税务重大违法）",
+      "severity": "red_line",
+      "scope": "announcements",
+      "patterns": ["行政处罚", "监管函", "警示函", "纪律处分", "重大违法", "处罚决定", "立案告知", "税务处理决定"],
+      "threshold": 1,
+      "expectation": "无监管处罚类公告",
+      "manual_url": "https://www.creditchina.gov.cn/xinyongfuwu/",
+      "why": "受罚公告是官方披露的确定性负面事实，且往往伴随整改与合规成本。"
+    },
+    {
+      "id": "RL-04",
+      "title": "劳动争议 / 仲裁密集",
+      "severity": "red_line",
+      "scope": "announcements",
+      "patterns": ["劳动争议", "劳动仲裁", "仲裁", "欠薪", "社保", "员工诉讼"],
+      "threshold": 3,
+      "expectation": "劳动争议类公告少于 3 条",
+      "manual_url": "https://wenshu.court.gov.cn/",
+      "why": "密集劳动争议通常对应欠薪、裁员纠纷或社保欠缴，直接影响在职稳定性。"
+    },
+    {
+      "id": "RL-05",
+      "title": "法定代表人 / 主要股东近期频繁变更",
+      "severity": "red_line",
+      "scope": "registry",
+      "requires": ["official_cn:gsxt", "devnors:enterprise/industrial_commercial_change"],
+      "patterns": ["法定代表人变更", "控股股东变更", "实际控制人变更"],
+      "threshold": 3,
+      "expectation": "近一年法定代表人/控股股东变更少于 3 次",
+      "manual_url": "https://www.gsxt.gov.cn/index.html",
+      "why": "密集变更常见于风险出清、壳资源腾挪或实控人退场。"
+    },
+    {
+      "id": "RL-06",
+      "title": "诉讼密集且多为被告",
+      "severity": "red_line",
+      "scope": "announcements",
+      "patterns": ["重大诉讼", "诉讼进展", "被诉", "作为被告", "仲裁事项", "冻结", "查封"],
+      "threshold": 4,
+      "expectation": "涉诉公告少于 4 条且无明显被告倾向",
+      "manual_url": "https://wenshu.court.gov.cn/",
+      "why": "被告密集说明付款能力或履约质量存在系统性问题。"
+    },
+    {
+      "id": "RL-07",
+      "title": "审计非标意见 / 更换会计师事务所",
+      "severity": "red_line",
+      "scope": "announcements",
+      "patterns": ["非标意见", "保留意见", "无法表示意见", "否定意见", "更换会计师事务所", "改聘会计师事务所"],
+      "threshold": 1,
+      "expectation": "无非标审计意见，未临时更换年审机构",
+      "manual_url": "https://www.cninfo.com.cn/",
+      "why": "非标意见是财报可信度的官方预警；临时换所是典型的风险前置信号。"
+    },
+    {
+      "id": "RL-08",
+      "title": "退市 / 停牌 / 立案调查风险（上市主体）",
+      "severity": "red_line",
+      "scope": "announcements",
+      "patterns": ["退市风险", "终止上市", "暂停上市", "停牌", "立案调查", "证监会立案", "被立案", "*ST", "风险警示"],
+      "threshold": 1,
+      "expectation": "无退市/立案类公告",
+      "manual_url": "https://www.cninfo.com.cn/",
+      "why": "直接对应交易资格与持续经营能力。"
+    },
+    {
+      "id": "RL-09",
+      "title": "财务恶化（连续亏损或高杠杆）",
+      "severity": "warning",
+      "scope": "financials",
+      "expectation": "最近报告期净利润为正，资产负债率处于行业常态区间",
+      "manual_url": "https://www.cninfo.com.cn/",
+      "why": "财务恶化不一定立刻出事，但会影响薪酬兑现与裁员概率。"
+    },
+    {
+      "id": "RL-10",
+      "title": "大额股权质押 / 冻结 / 减持",
+      "severity": "warning",
+      "scope": "announcements",
+      "patterns": ["股权质押", "股份质押", "股份冻结", "司法冻结", "减持计划", "被动减持", "平仓风险"],
+      "threshold": 2,
+      "expectation": "质押/冻结/减持类公告少于 2 条",
+      "manual_url": "https://www.cninfo.com.cn/",
+      "why": "高质押+被动减持是控制权不稳定与流动性紧张的组合信号。"
+    },
+    {
+      "id": "RL-11",
+      "title": "重大担保 / 资金占用 / 关联交易异常",
+      "severity": "warning",
+      "scope": "announcements",
+      "patterns": ["对外担保", "资金占用", "关联交易", "非经营性占用", "违规担保"],
+      "threshold": 3,
+      "expectation": "担保/资金占用类公告少于 3 条",
+      "manual_url": "https://www.cninfo.com.cn/",
+      "why": "关联方占用与违规担保常先于资金链问题暴露。"
+    },
+    {
+      "id": "RL-12",
+      "title": "社保欠缴 / 欠薪公示",
+      "severity": "red_line",
+      "scope": "enforcement",
+      "patterns": ["欠薪", "社保欠缴", "拖欠工资"],
+      "requires": ["official_cn:credit_china", "official_cn:gsxt"],
+      "expectation": "无欠薪/社保欠缴公示",
+      "manual_url": "https://www.creditchina.gov.cn/xinyongfuwu/",
+      "why": "直接决定工资与社保能否按时足额到账。"
+    }
+  ]
+}
