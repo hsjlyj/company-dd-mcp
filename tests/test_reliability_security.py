@@ -226,8 +226,18 @@ def test_sec_filings_tolerates_ragged_arrays(monkeypatch: pytest.MonkeyPatch, tm
 # 这一组断言的存在理由（写下来，别让下一个人重新踩）：
 #
 #   * install.sh 与 tools/refresh_data_sources.py 在 main 上丢过可执行位
-#     （100644），`./install.sh` 实测 exit 126。此前没有任何 CI 断言在看它，
-#     掉了两次（f475c8e / 7fed6cc）都靠人肉发现。
+#     （100644），`./install.sh` 实测 exit 126。此前没有任何 CI 断言在看它。
+#
+#     比「掉了两次」更严重的事实（试金 实测，逐提交核过 mode 列）：
+#     两次「恢复可执行位」的提交，一次都没生效 ——
+#
+#       7fed6cc  chore: restore executable bit on install.sh        → 提交后仍 100644
+#       f475c8e  chore: restore executable bit on tools/refresh_..  → 提交后仍 100644
+#       c83b092a test: add regression coverage                      → install.sh 又被换回 ef5e31f，mode 仍未动
+#
+#     不是「掉了两次、被发现了两次」，是「试图修复两次、两次都没成，
+#     且当时没有任何东西发现它没成」。这两条 mode 断言如果当时就在 CI 里，
+#     上面两笔会当场变红 —— 这就是它们存在的全部理由。
 #   * 7fed6cc 那笔提交信息是 "restore executable bit"（声称只改权限位），
 #     实际把 install.sh 从 31 行的 ef5e31f 整份换成了 50 行的 34e769f，
 #     而且 mode 最后仍是 100644 —— 声明的事没做成，没声明的事做了一件。
