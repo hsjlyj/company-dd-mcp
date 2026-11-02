@@ -6,6 +6,7 @@ import glob
 import hashlib
 import os
 import re
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -228,16 +229,27 @@ def test_sec_filings_tolerates_ragged_arrays(monkeypatch: pytest.MonkeyPatch, tm
 #   * install.sh 与 tools/refresh_data_sources.py 在 main 上丢过可执行位
 #     （100644），`./install.sh` 实测 exit 126。此前没有任何 CI 断言在看它。
 #
-#     比「掉了两次」更严重的事实（试金 实测，逐提交核过 mode 列）：
-#     两次「恢复可执行位」的提交，一次都没生效 ——
+#     而且它被**修过两次，两次都没修成**（试金 逐提交核过 blob 与 mode）：
 #
-#       7fed6cc  chore: restore executable bit on install.sh        → 提交后仍 100644
-#       f475c8e  chore: restore executable bit on tools/refresh_..  → 提交后仍 100644
-#       c83b092a test: add regression coverage                      → install.sh 又被换回 ef5e31f，mode 仍未动
+#       7fed6cc  声称 chore: restore executable bit on install.sh
+#                → mode 前后都是 100644（没修成）
+#                → 同时把 install.sh 从 ef5e31f 换成了 34e769f（31 行 → 50 行）
+#                  即：声明的没做成，没声明的做了一件
 #
-#     不是「掉了两次、被发现了两次」，是「试图修复两次、两次都没成，
-#     且当时没有任何东西发现它没成」。这两条 mode 断言如果当时就在 CI 里，
-#     上面两笔会当场变红 —— 这就是它们存在的全部理由。
+#       f475c8e  声称 chore: restore executable bit on tools/refresh_data_sources.py
+#                → 该文件 blob 与 mode 前后逐字节相同（6791cae / 100644）
+#                  即：一笔空操作，什么都没做
+#
+#       c83b092a test: add regression coverage
+#                → install.sh 又被从 34e769f 换回 ef5e31f，mode 依然没动
+#
+#     注意这两笔的失效模式**不同**：一个「改错了」（顺手换了文件内容），
+#     一个「以为改了但没改」（空操作）。别把它们压成「掉了两次」——
+#     混为一谈会让人得出「语义断言没用」的错误结论，而正确结论是
+#     它们需要**不同的**防线：内容断言 + mode 断言各拦一类。
+#
+#     两笔当时都没有任何东西发现它们没生效。这两条 mode 断言如果当时
+#     就在 CI 里，上面两笔会当场变红 —— 这就是它们存在的全部理由。
 #   * 7fed6cc 那笔提交信息是 "restore executable bit"（声称只改权限位），
 #     实际把 install.sh 从 31 行的 ef5e31f 整份换成了 50 行的 34e769f，
 #     而且 mode 最后仍是 100644 —— 声明的事没做成，没声明的事做了一件。
@@ -347,8 +359,24 @@ def test_wheel_contains_rules_json() -> None:
     """构建 wheel 时 rules.json 必须被打包进去。
 
     rules.json 是红线规则的数据源，漏了它等于装了包却没有规则。
+
+    每次先清掉旧产物再构建：复用现成 wheel 会在脏工作区里假绿。
+    实测（试金 反例，我复现）：把 pyproject.toml 的
+    [tool.setuptools.package-data] 清成 company_dd = [] 之后 ——
+
+        rm -rf dist build *.egg-info  →  FAILED  ✅ 正确报红
+        rm -rf dist *.egg-info        →  passed  ❌ 假绿
+
+    后者假绿的原因：dist/*.whl 是上一次构建的产物，而
+    build/lib/company_dd/rules.json 这个残留会把 rules.json 重新塞进
+    下一次产出的 wheel。断言读的是「可能过期的产物」，不是「当前配置的
+    真实结果」。CI 上是干净 clone 所以不受影响，但本地
+    `./install.sh`（它会跑 pytest 并产出 dist/）之后再单跑测试就是脏场景。
+    代价是每次真构建一次 wheel（约 2~5 秒），换来的是不再假绿。
     """
     dist = Path("dist")
+    shutil.rmtree(dist, ignore_errors=True)
+    shutil.rmtree("build", ignore_errors=True)
     wheels = sorted(glob.glob(str(dist / "*.whl")))
     if not wheels:
         # 没有现成 wheel 就现场构建一个。
@@ -356,7 +384,7 @@ def test_wheel_contains_rules_json() -> None:
         # 用 sys.executable 而不是裸 "python"：裸 python 在 venv 里、
         # 在 CI 的 ubuntu runner 上都可能不存在（本机实测 `python: command
         # not found`），而它一旦不存在就会抛 FileNotFoundError，
-        # 被下面 except 吞成 skip —— 断言看起来在跑，实际一次都没执行。
+        # 被除 skip 兜底吞掉 —— 断言看起来在跑，实际一次都没执行。
         # 这正是本文件要防的那类「假绿」。
         #
         # build 由 pyproject.toml 的 dev extra 提供（pytest + build）。
