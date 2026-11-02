@@ -375,28 +375,47 @@ def test_wheel_contains_rules_json() -> None:
     代价是每次真构建一次 wheel（约 2~5 秒），换来的是不再假绿。
     """
     dist = Path("dist")
+    # 必须无条件构建，且两条旧产物都要清掉。
+    #
+    # 试金 实测的三条对照（我逐条复现，结果一字不差）。攻击方式都是把
+    # pyproject.toml 的 [tool.setuptools.package-data] 清成 company_dd = []：
+    #
+    #   A 什么都不删（dist 有 + build 有） → PASS ❌ 0.06s，根本没构建
+    #   B 只删 dist，保留 build          → PASS ❌ 2.04s，构建了但仍带 rules.json
+    #   C 两个都删                       → FAIL ✅ 2.02s，正确报红
+    #
+    # 两条独立的假绿路径：
+    #   1) 旧 dist/*.whl 被 glob 直接命中，断言读的是上一次构建的产物；
+    #   2) build/lib/company_dd/rules.json 残留会在新构建时把 rules.json
+    #      重新打进 wheel，即使 package-data 已经坏了。
+    # 所以只清 dist 挡不住 B，只清 build 挡不住 A，必须两条都清、
+    # 并且去掉 `if not wheels` 这个复用分支 —— 它就是第 1 条短路的来源。
+    #
+    # 为什么值得付这个代价（每次真构建一次 wheel，约 2~5 秒）：
+    # CI 是干净 clone，走的是对照 C，所以 CI 上这条断言本来就对；
+    # 风险只在本地脏工作区 —— 而 `./install.sh` 第 30 行会跑 pytest
+    # 并留下 dist/，所以「先 install 再单跑测试」正是最自然的本地路径，
+    # 下一个改 pyproject.toml 的人会看到绿。这是假绿，不是真通过。
     shutil.rmtree(dist, ignore_errors=True)
-    shutil.rmtree("build", ignore_errors=True)
+    shutil.rmtree(Path("build"), ignore_errors=True)
+    for stale in Path(".").glob("*.egg-info"):
+        shutil.rmtree(stale, ignore_errors=True)
+
+    # 用 sys.executable 而不是裸 "python"：裸 python 在 venv 里、
+    # 在 CI 的 ubuntu runner 上都可能不存在（本机实测 `python: command
+    # not found`），而它一旦不存在就会抛 FileNotFoundError，
+    # 被 skip 兜底吞掉 —— 断言看起来在跑，实际一次都没执行。
+    #
+    # build 由 pyproject.toml 的 dev extra 提供（pytest + build）。
+    # 如果它缺失，说明 dev extra 退化了 —— 那是产品缺陷（本地也构不出
+    # wheel），必须报错而不是 skip。
+    subprocess.run(
+        [sys.executable, "-m", "build", "--wheel", "--outdir", str(dist), "."],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
     wheels = sorted(glob.glob(str(dist / "*.whl")))
-    if not wheels:
-        # 没有现成 wheel 就现场构建一个。
-        #
-        # 用 sys.executable 而不是裸 "python"：裸 python 在 venv 里、
-        # 在 CI 的 ubuntu runner 上都可能不存在（本机实测 `python: command
-        # not found`），而它一旦不存在就会抛 FileNotFoundError，
-        # 被除 skip 兜底吞掉 —— 断言看起来在跑，实际一次都没执行。
-        # 这正是本文件要防的那类「假绿」。
-        #
-        # build 由 pyproject.toml 的 dev extra 提供（pytest + build）。
-        # 如果它缺失，说明 dev extra 退化了 —— 那是产品缺陷（本地也构不出
-        # wheel），必须报错而不是 skip。
-        subprocess.run(
-            [sys.executable, "-m", "build", "--wheel", "--outdir", str(dist), "."],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        wheels = sorted(glob.glob(str(dist / "*.whl")))
     assert wheels, "没有构建出 wheel"
 
     with zipfile.ZipFile(wheels[0]) as whl:
