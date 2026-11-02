@@ -7,6 +7,7 @@ import hashlib
 import os
 import re
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -242,10 +243,22 @@ def test_sec_filings_tolerates_ragged_arrays(monkeypatch: pytest.MonkeyPatch, tm
 # （例如 `grep 'pip install'`：pip 与 install 之间实际隔着 `" `）。
 # 所以这里断言**语义**（做了 editable 安装、没退回手抄依赖），
 # 不断言**写法**（参数顺序、变量名、行数都不管）。
+#
+# 这道正则的天花板（试金 实测，写下来免得下一个人以为它更强）：
+#   * 加行首锚定后拦得住「把真行注释掉」（含缩进后注释）。
+#   * 拦不住「真行还在但不再执行」：改成 echo '...'、包进 if false; then。
+#     那两行里 install 后面照样跟着 -e ".[dev]"，正则只看得见文本。
+#   * 真正覆盖「这行会被执行」的是 test_install_sh_runs_smoke：它跑 install.sh
+#     并验证项目真的被装上。防篡改交给 mode 断言 + blob 评审清单，
+#     本正则只负责「快速失败 + 给出可读原因」，不承担防篡改职责。
+#
+# 坐标写法提醒：7fed6cc 的**父提交**是 c83b092a，只是它当时持有的
+# install.sh 是 ef5e31f。别写成「7fed6cc 的父提交是 ef5e31f」——
+# 那是提交坐标，下一个人拿去 git show 会找不到（f436cd9 那个坑的翻版）。
 # ---------------------------------------------------------------------------
 
-# editable 安装：install 与 -e ".[dev]" 之间允许有任何参数。
-_EDITABLE_INSTALL = re.compile(r'install\b[^\n]*\s-e\s+"?\.\[dev\]"?')
+# editable 安装：行首锚定并排除注释行；install 与 -e ".[dev]" 之间允许有任何参数。
+_EDITABLE_INSTALL = re.compile(r'^[^#\n]*\binstall\b[^\n]*\s-e\s+"?\.\[dev\]"?', re.MULTILINE)
 
 # 初版的手抄依赖写法：能装依赖，但装不上项目本身。
 _HAND_COPIED_DEPS = "mcp httpx anyio pytest"
@@ -328,16 +341,23 @@ def test_wheel_contains_rules_json() -> None:
     dist = Path("dist")
     wheels = sorted(glob.glob(str(dist / "*.whl")))
     if not wheels:
-        # 没有现成 wheel 就现场构建一个（CI 里 build 已装）
-        try:
-            subprocess.run(
-                ["python", "-m", "build", "--wheel", "--outdir", str(dist), "."],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pytest.skip("无法构建 wheel（缺 build 模块），跳过打包内容校验")
+        # 没有现成 wheel 就现场构建一个。
+        #
+        # 用 sys.executable 而不是裸 "python"：裸 python 在 venv 里、
+        # 在 CI 的 ubuntu runner 上都可能不存在（本机实测 `python: command
+        # not found`），而它一旦不存在就会抛 FileNotFoundError，
+        # 被下面 except 吞成 skip —— 断言看起来在跑，实际一次都没执行。
+        # 这正是本文件要防的那类「假绿」。
+        #
+        # build 由 pyproject.toml 的 dev extra 提供（pytest + build）。
+        # 如果它缺失，说明 dev extra 退化了 —— 那是产品缺陷（本地也构不出
+        # wheel），必须报错而不是 skip。
+        subprocess.run(
+            [sys.executable, "-m", "build", "--wheel", "--outdir", str(dist), "."],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
         wheels = sorted(glob.glob(str(dist / "*.whl")))
     assert wheels, "没有构建出 wheel"
 
