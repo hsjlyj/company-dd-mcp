@@ -19,7 +19,12 @@ echo "== 安装项目与依赖"
 
 echo "== 冒烟测试（离线）"
 export COMPANY_DD_HOME="${COMPANY_DD_HOME:-$ROOT/data}"
-"$ROOT/.venv/bin/python" -m pytest tests -q
+# COMPANY_DD_SKIP_TESTS=1 只跑离线数据源自检、跳过 pytest。
+# 给"从测试里调用 install.sh"的场景用：否则 install.sh 跑 pytest，
+# pytest 里的用例又调 install.sh，会无限递归直到超时。
+if [ "${COMPANY_DD_SKIP_TESTS:-0}" != "1" ]; then
+  "$ROOT/.venv/bin/python" -m pytest tests -q
+fi
 "$ROOT/.venv/bin/python" tools/refresh_data_sources.py --offline
 
 cat <<EOF
