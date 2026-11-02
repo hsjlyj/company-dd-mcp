@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "company-dd"
 version = "0.1.0"
 description = "证据优先的企业背调 MCP：红线规则 + 未验证清单 + 可复核证据台账"
-readme = "README.md"
+readme = { file = "README.md", content-type = "text/markdown" }
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "company-dd" }]

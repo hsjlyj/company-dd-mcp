@@ -8,15 +8,26 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 from .models import Evidence, Report, now_iso
 
+REPORT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+
+
+def validate_report_id(report_id: str) -> str:
+    """报告 ID 只允许安全文件名字符，避免 MCP/CLI 输入造成路径穿越。"""
+    value = (report_id or "").strip()
+    if not REPORT_ID_RE.fullmatch(value):
+        raise ValueError(f"非法报告编号：{report_id!r}")
+    return value
+
 
 class Ledger:
     def __init__(self, home: Path, report_id: str) -> None:
-        self.dir = Path(home) / "raw" / report_id
+        self.dir = Path(home) / "raw" / validate_report_id(report_id)
         self.dir.mkdir(parents=True, exist_ok=True)
         self.items: list[Evidence] = []
 
@@ -33,9 +44,10 @@ class Ledger:
         blob = (payload or "").encode("utf-8")
         digest = hashlib.sha256(blob).hexdigest()
         idx = len(self.items) + 1
-        path = self.dir / f"{idx:03d}-{source_id}-{digest[:8]}.txt"
+        safe_source = re.sub(r"[^A-Za-z0-9_-]+", "-", source_id).strip("-") or "source"
+        path = self.dir / f"{idx:03d}-{safe_source}-{digest[:8]}.txt"
         if not path.exists():
-            path.write_bytes(blob[:2_000_000])
+            path.write_bytes(blob)
         ev = Evidence(
             source_id=source_id,
             source_label=source_label,
@@ -60,18 +72,19 @@ class ReportStore:
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def save(self, report: Report) -> Path:
-        path = self.dir / f"{report.report_id}.json"
+        path = self.dir / f"{validate_report_id(report.report_id)}.json"
         path.write_text(
             json.dumps(report.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8"
         )
         return path
 
     def load(self, report_id: str) -> dict[str, Any]:
-        path = self.dir / f"{report_id}.json"
+        safe_id = validate_report_id(report_id)
+        path = self.dir / f"{safe_id}.json"
         if not path.exists():
-            matches = sorted(self.dir.glob(f"{report_id}*.json"))
+            matches = sorted(self.dir.glob(f"{safe_id}*.json"))
             if not matches:
-                raise FileNotFoundError(f"报告不存在：{report_id}")
+                raise FileNotFoundError(f"报告不存在：{safe_id}")
             path = matches[0]
         return json.loads(path.read_text(encoding="utf-8"))
 

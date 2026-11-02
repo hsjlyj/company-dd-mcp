@@ -21,7 +21,8 @@ from pathlib import Path
 from typing import Any
 
 from .errors import DdError
-from .models import Evidence, RuleResult, now_iso
+from .ledger import validate_report_id
+from .models import OPEN_STATUSES, Evidence, RuleResult, now_iso
 
 MANUAL_DIR = "manual"
 
@@ -70,7 +71,7 @@ class ManualStore:
         self.dir.mkdir(parents=True, exist_ok=True)
 
     def path(self, report_id: str) -> Path:
-        return self.dir / f"{report_id}.json"
+        return self.dir / f"{validate_report_id(report_id)}.json"
 
     def add(self, report_id: str, finding: ManualFinding) -> Path:
         if finding.outcome not in ("clear", "hit"):
@@ -107,8 +108,13 @@ class ManualStore:
             return []
         try:
             return json.loads(p.read_text(encoding="utf-8"))
-        except Exception:  # noqa: BLE001
-            return []
+        except json.JSONDecodeError as exc:
+            raise DdError(
+                f"人工核查记录损坏：{p}（{exc}）",
+                code="invalid_manual_store",
+                source="manual",
+                hint="先修复或备份该 JSON；不要直接覆盖，以免丢失审计轨迹。",
+            ) from exc
 
     def index(self) -> dict[str, dict[str, Any]]:
         out: dict[str, dict[str, Any]] = {}
@@ -147,6 +153,11 @@ def reevaluate_report(data: dict[str, Any], findings: list[dict[str, Any]]) -> d
     data["rules"] = [r.to_dict() for r in rules]
     data["verdict"] = verdict
     data["verdict_reason"] = reason
+    fields = data.get("fields") or {}
+    data["gaps"] = [f for f in fields.values() if f.get("status") in OPEN_STATUSES]
+    data["evidence_count"] = sum(len(f.get("evidence") or []) for f in fields.values()) + sum(
+        len(r.get("evidence") or []) for r in data["rules"]
+    )
     return data
 
 
@@ -157,11 +168,26 @@ def apply_manual(rules: list[RuleResult], findings: list[dict[str, Any]]) -> lis
         f = by_rule.get(r.rule_id)
         if not f:
             continue
+        if f.get("outcome") not in ("clear", "hit"):
+            raise DdError(
+                f"人工核查结论无效：{f.get('outcome')}",
+                code="invalid_outcome",
+                source="manual",
+            )
         ev = ManualFinding(**{k: v for k, v in f.items() if k in ManualFinding.__annotations__})
+        manual_evidence = ev.to_evidence()
+        if r.status == "hit" and f["outcome"] == "clear":
+            # 人工「未查到」不能抹掉机器已保存的命中证据；保留红色结论并显式记录冲突。
+            r.reason = (
+                f"存在冲突：机器证据已命中，人工核查人 {f['operator']} 于 {f['checked_at']} "
+                f"用「{f['method']}」给出 clear。请复核两边证据后再改判。"
+            ).strip()
+            r.evidence = [*r.evidence, manual_evidence]
+            continue
         r.status = "clear" if f["outcome"] == "clear" else "hit"
         r.reason = (
             f"人工核查：{f['operator']} 于 {f['checked_at']} 用「{f['method']}」核查，"
             f"结论 {f['outcome']}。{f.get('note') or ''}"
         ).strip()
-        r.evidence = [ev.to_evidence()]
+        r.evidence = [manual_evidence]
     return rules
