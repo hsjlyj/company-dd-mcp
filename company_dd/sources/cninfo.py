@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from ..errors import DdError
@@ -148,9 +149,9 @@ class CninfoSource(Source):
         ts = row.get("announcementTime")
         date = ""
         if isinstance(ts, (int, float)) and ts > 0:
-            from datetime import datetime
-
-            date = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d")
+            date = datetime.fromtimestamp(
+                ts / 1000, tz=timezone(timedelta(hours=8))
+            ).strftime("%Y-%m-%d")
         return {
             "title": (row.get("announcementTitle") or "").replace("<em>", "").replace("</em>", ""),
             "code": row.get("secCode"),

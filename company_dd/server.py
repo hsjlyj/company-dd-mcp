@@ -182,7 +182,10 @@ async def manual_record(
 @server.tool()
 async def manual_findings(report_id: str) -> dict[str, Any]:
     """读取某份报告已回填的人工核查证据。"""
-    return {"report_id": report_id, "findings": await _run(ManualStore(config.home).load, report_id)}
+    try:
+        return {"report_id": report_id, "findings": await _run(ManualStore(config.home).load, report_id)}
+    except ValueError as exc:
+        return {"error": str(exc), "code": "invalid_input"}
 
 
 @server.tool()
@@ -198,6 +201,8 @@ async def get_report(report_id: str) -> dict[str, Any]:
         return {"report": await _run(store.load, report_id)}
     except FileNotFoundError as exc:
         return {"error": str(exc), "code": "not_found"}
+    except ValueError as exc:
+        return {"error": str(exc), "code": "invalid_input"}
 
 
 @server.tool()
@@ -210,6 +215,8 @@ async def get_evidence(report_id: str) -> dict[str, Any]:
         data = await _run(store.load, report_id)
     except FileNotFoundError as exc:
         return {"error": str(exc), "code": "not_found"}
+    except ValueError as exc:
+        return {"error": str(exc), "code": "invalid_input"}
     items: list[dict[str, Any]] = []
     for f in (data.get("fields") or {}).values():
         items.extend(f.get("evidence") or [])
@@ -218,7 +225,7 @@ async def get_evidence(report_id: str) -> dict[str, Any]:
     seen = set()
     unique = []
     for e in items:
-        key = (e.get("url"), e.get("sha256"))
+        key = (e.get("url"), e.get("sha256"), e.get("pointer"), e.get("quote"))
         if key in seen:
             continue
         seen.add(key)

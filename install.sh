@@ -13,13 +13,14 @@ if [ ! -x "$ROOT/.venv/bin/python" ]; then
   "$ROOT/.venv/bin/python" "$ROOT/.venv/get-pip.py" -q
 fi
 
-echo "== 安装依赖"
+echo "== 安装项目与依赖"
 "$ROOT/.venv/bin/pip" install -q --upgrade pip
-"$ROOT/.venv/bin/pip" install -q mcp httpx anyio pytest
+"$ROOT/.venv/bin/pip" install -q -e ".[dev]"
 
-echo "== 冒烟测试"
+echo "== 冒烟测试（离线）"
+export COMPANY_DD_HOME="${COMPANY_DD_HOME:-$ROOT/data}"
 "$ROOT/.venv/bin/python" -m pytest tests -q
-"$ROOT/.venv/bin/python" tools/refresh_data_sources.py
+"$ROOT/.venv/bin/python" tools/refresh_data_sources.py --offline
 
 cat <<EOF
 

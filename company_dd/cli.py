@@ -13,6 +13,7 @@ from .config import Config
 from .ledger import ReportStore
 from .manual import ManualFinding, ManualStore, reevaluate_report
 from .report import render_html, render_markdown
+from .rules import load_rules
 
 
 def _engine() -> Engine:
@@ -80,7 +81,12 @@ def cmd_report(args: argparse.Namespace) -> int:
 def cmd_html(args: argparse.Namespace) -> int:
     from .server import _write_files
 
-    rep = _engine().build_report(args.name, announcement_pages=args.pages)
+    rep = _engine().build_report(
+        args.name,
+        announcement_pages=args.pages,
+        page_size=args.page_size,
+        window_days=args.window_days,
+    )
     paths = _write_files(rep)
     print(paths["html"])
     return 0
@@ -191,7 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("manual-record", help="回填一条人工核查结论并重算报告")
     sp.add_argument("report_id")
-    sp.add_argument("rule_id", choices=[f"RL-{i:02d}" for i in range(1, 13)])
+    sp.add_argument("rule_id", choices=[r["id"] for r in load_rules()["rules"]])
     sp.add_argument("outcome", choices=("clear", "hit"))
     sp.add_argument("--operator", required=True, help="核查人或系统账号")
     sp.add_argument("--method", required=True, help="核查方法，例如 GSXT 手动检索")

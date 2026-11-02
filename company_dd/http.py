@@ -47,18 +47,33 @@ def _json_loads(text: str) -> Any:
 class HttpClient:
     """按主机限速的同步客户端。httpx 默认 trust_env=True，会走 HTTPS_PROXY。"""
 
+    RETRYABLE_NETWORK_ERRORS = (
+        httpx.ConnectError,
+        httpx.ConnectTimeout,
+        httpx.ReadTimeout,
+        httpx.WriteTimeout,
+        httpx.PoolTimeout,
+    )
+
     def __init__(self, config: Config) -> None:
         self.config = config
         self._lock = threading.Lock()
         self._last_hit: dict[str, float] = {}
+        self._client = httpx.Client(timeout=config.timeout, follow_redirects=True)
+
+    def close(self) -> None:
+        self._client.close()
 
     def _throttle(self, host: str) -> None:
-        with self._lock:
-            last = self._last_hit.get(host, 0.0)
-            wait = self.config.min_host_interval - (time.time() - last)
-            if wait > 0:
-                time.sleep(wait)
-            self._last_hit[host] = time.time()
+        # 锁内只计算等待时间，睡眠放到锁外；否则一个慢主机会阻塞所有主机的请求。
+        while True:
+            with self._lock:
+                now = time.time()
+                wait = self.config.min_host_interval - (now - self._last_hit.get(host, 0.0))
+                if wait <= 0:
+                    self._last_hit[host] = now
+                    return
+            time.sleep(wait)
 
     def request(
         self,
@@ -86,11 +101,10 @@ class HttpClient:
         for attempt in range(self.config.max_retries + 1):
             self._throttle(host)
             try:
-                with httpx.Client(timeout=self.config.timeout, follow_redirects=True) as client:
-                    resp = client.request(
-                        method, url, headers=head, params=params, data=data, json=json_body
-                    )
-            except httpx.HTTPError as exc:
+                resp = self._client.request(
+                    method, url, headers=head, params=params, data=data, json=json_body
+                )
+            except self.RETRYABLE_NETWORK_ERRORS as exc:
                 last_err = DdError(
                     f"网络错误：{exc}",
                     code="unavailable",
@@ -102,6 +116,13 @@ class HttpClient:
                     time.sleep(0.6 * (2**attempt))
                     continue
                 raise last_err from exc
+            except httpx.HTTPError as exc:
+                raise DdError(
+                    f"请求配置错误：{exc}",
+                    code="invalid_request",
+                    url=url,
+                    source=source,
+                ) from exc
 
             body = resp.text[:8_000_000]
             if resp.status_code in allow_status:
