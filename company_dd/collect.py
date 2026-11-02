@@ -498,17 +498,30 @@ class Engine:
                             f"devnors_{k}", f"[聚合]{k}", v, status=PARTIAL, evidence=[ev],
                             note="第三方聚合字段，来源授权口径未公开；须与官方渠道交叉验证。",
                         )
-                for t, key in (("exec_person", "exec_or_breach"), ("breach_of_trust", "exec_or_breach")):
-                    try:
-                        r2 = dev.query("enterprise", t, "", filters={"id": first.get("id")} if hits else {})
-                        if r2.get("hits"):
-                            keyed_hits[key] = {
-                                "source_label": dev.spec.label,
-                                "type": t,
-                                "hits": r2["hits"][:3],
-                            }
-                    except DdError:
-                        continue
+                if hits:
+                    rl01 = keyed_hits.setdefault(
+                        "RL-01",
+                        {
+                            "source": "devnors",
+                            "source_label": dev.spec.label,
+                            "url": dev.spec.homepage,
+                            "checked": [],
+                            "labels": [],
+                            "evidence": [],
+                        },
+                    )
+                    subject_id = first.get("id")
+                    for tool, label in (("exec_person", "被执行人"), ("breach_of_trust", "失信被执行人")):
+                        try:
+                            r2 = dev.query("enterprise", tool, "", filters={"id": subject_id})
+                            rl01["checked"].append(label)
+                            rl01["labels"].append(label)
+                            for item in (r2.get("hits") or [])[:3]:
+                                rl01["evidence"].append({"tool": tool, "label": label, "item": item})
+                        except DdError:
+                            continue
+                    if not rl01["evidence"] and not rl01["checked"]:
+                        keyed_hits.pop("RL-01", None)
             except DdError as exc:
                 report.notes.append(f"Devnors 采集失败：{exc.message}")
 
@@ -654,6 +667,12 @@ class Engine:
                     payload = json.dumps(by_url[ev.url], ensure_ascii=False)
                 elif ev.url in filings_by_url:
                     payload = json.dumps(filings_by_url[ev.url], ensure_ascii=False)
+                if payload is None and (ev.quote or ev.pointer):
+                    # Key 源/人工证据没有公告 URL 可反查时，至少把已提取的载荷摘要落台账，
+                    # 保证每条 hit 证据都有可复核的 sha256，而不是空哈希。
+                    payload = json.dumps(
+                        {"pointer": ev.pointer, "quote": ev.quote}, ensure_ascii=False
+                    )
                 if payload is None:
                     continue
                 new = ledger.add(
@@ -686,9 +705,11 @@ def _norm_ann(item: dict[str, Any]) -> dict[str, Any]:
     ts = item.get("time_ms")
     date = ""
     if isinstance(ts, (int, float)) and ts > 0:
-        from datetime import datetime
+        from datetime import datetime, timedelta, timezone
 
-        date = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d")
+        date = datetime.fromtimestamp(
+            ts / 1000, tz=timezone(timedelta(hours=8))
+        ).strftime("%Y-%m-%d")
     return {
         "title": item.get("title", ""),
         "date": date,
@@ -698,14 +719,37 @@ def _norm_ann(item: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _norm_match_text(value: Any) -> str:
+    import re
+
+    return re.sub(r"[\s\-_.()（）,，]+", "", str(value or "")).lower()
+
+
+def _reliable_match(candidate: dict[str, Any], query: str) -> bool:
+    """只接受能指回同一主体的匹配，避免把模糊搜索第一名误当调查对象。"""
+    q = _norm_match_text(query)
+    if not q:
+        return False
+    name = _norm_match_text(candidate.get("name"))
+    if name and (name == q or q in name or name in q):
+        return True
+    for key in ("code", "ticker", "cik", "qid", "credit_code"):
+        anchor = _norm_match_text(candidate.get(key))
+        if anchor and anchor == q:
+            return True
+    return False
+
+
 def _rank(candidates: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
     order = {"cninfo_listed": 0, "sec_edgar": 1, "opencorporates": 2, "wikidata": 3}
     q = query.strip()
     for c in candidates:
         c["exact_name_match"] = (c.get("name") or "").strip() == q
+        c["reliable_match"] = _reliable_match(c, q)
     return sorted(
         candidates,
         key=lambda c: (
+            0 if c.get("reliable_match") else 1,
             order.get(c.get("kind", "wikidata"), 9),
             0 if c.get("exact_name_match") else 1,
         ),
@@ -713,16 +757,17 @@ def _rank(candidates: list[dict[str, Any]], query: str) -> list[dict[str, Any]]:
 
 
 def _pick(candidates: list[dict[str, Any]]) -> dict[str, Any] | None:
-    for c in candidates:
+    reliable = [c for c in candidates if c.get("reliable_match")]
+    for c in reliable:
         if c.get("kind") == "cninfo_listed" and c.get("category") in CN_LISTED_CATEGORIES:
             return c
-    for c in candidates:
+    for c in reliable:
         if c.get("kind") == "sec_edgar":
             return c
-    for c in candidates:
+    for c in reliable:
         if c.get("kind") == "opencorporates":
             return c
-    return candidates[0] if candidates else None
+    return reliable[0] if reliable else None
 
 
 def _err(exc: Exception) -> dict[str, Any]:

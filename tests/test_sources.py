@@ -22,6 +22,23 @@ def test_secucode_mapping_covers_cn_markets() -> None:
     assert CninfoSource.secucode("03750", "港股") == "03750.HK"
 
 
+def test_announcement_date_uses_beijing_date_not_host_timezone(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TZ", "America/New_York")
+    try:
+        import time
+
+        time.tzset()
+    except AttributeError:
+        pass
+    row = {
+        "announcementTitle": "边界时间公告",
+        "announcementTime": 1790613000000,  # 2026-09-29 00:30:00 +08:00
+        "adjunctUrl": "finalpage/2026-09-29/x.PDF",
+    }
+
+    assert CninfoSource._norm_announcement(row)["date"] == "2026-09-29"
+
+
 def test_announcement_normalisation_keeps_source_url_and_date() -> None:
     row = {
         "announcementTitle": "<em>宁德时代</em>：关于某某的公告",
