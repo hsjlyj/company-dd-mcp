@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..errors import DdError
+from ..models import SourceStatus
 from .base import Source, SourceSpec
 
 TICKERS = "https://www.sec.gov/files/company_tickers.json"
@@ -108,22 +109,30 @@ class SecEdgarSource(Source):
         data = self._json(SUBMISSIONS.format(cik=cik))
         recent = (data.get("filings") or {}).get("recent") or {}
         forms = recent.get("form") or []
+        accessions = recent.get("accessionNumber") or []
+        documents = recent.get("primaryDocument") or []
+        filing_dates = recent.get("filingDate") or []
+        report_dates = recent.get("reportDate") or []
+        descriptions = recent.get("primaryDocDescription") or []
+
+        def _at(rows: list[Any], index: int) -> Any:
+            return rows[index] if index < len(rows) else ""
+
         items = []
         for i, form in enumerate(forms):
             if form_types and form not in form_types:
                 continue
-            acc = (recent.get("accessionNumber") or [""])[i].replace("-", "")
-            doc = (recent.get("primaryDocument") or [""])[i]
+            accession = str(_at(accessions, i) or "")
+            acc = accession.replace("-", "")
+            doc = str(_at(documents, i) or "")
             items.append(
                 {
                     "form": form,
-                    "filing_date": (recent.get("filingDate") or [""])[i],
-                    "report_date": (recent.get("reportDate") or [""])[i],
-                    "accession": (recent.get("accessionNumber") or [""])[i],
+                    "filing_date": _at(filing_dates, i),
+                    "report_date": _at(report_dates, i),
+                    "accession": accession,
                     "url": f"https://www.sec.gov/Archives/edgar/data/{cik}/{acc}/{doc}" if acc and doc else "",
-                    "description": (recent.get("primaryDocDescription") or [""])[i]
-                    if i < len(recent.get("primaryDocDescription") or [])
-                    else "",
+                    "description": _at(descriptions, i),
                 }
             )
             if len(items) >= limit:

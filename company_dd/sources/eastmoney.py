@@ -12,6 +12,7 @@ import urllib.parse
 from typing import Any
 
 from ..errors import DdError
+from ..models import SourceStatus
 from .base import Source, SourceSpec
 
 API = "https://datacenter-web.eastmoney.com/api/data/v1/get"
