@@ -123,15 +123,26 @@ def evaluate(
                         quote=payload,
                     )
                 )
+            checked = kh.get("checked") or []
             if evidence:
                 results.append(
                     RuleResult(
                         rule_id=rid, title=rule["title"], severity=rule["severity"],
                         status=RULE_HIT,
                         reason=f"数据源 {kh.get('source_label', kh.get('source'))} 在"
-                               f"{'、'.join(kh.get('labels') or kh.get('checked') or ['相关维度'])}中返回记录，"
+                               f"{'、'.join(kh.get('labels') or checked or ['相关维度'])}中返回记录，"
                                "需按主体名称/信用代码核对是否为同一主体。",
                         evidence=evidence,
+                        manual_url=rule.get("manual_url", ""),
+                    )
+                )
+            elif checked:
+                results.append(
+                    RuleResult(
+                        rule_id=rid, title=rule["title"], severity=rule["severity"],
+                        status=RULE_CLEAR,
+                        reason=f"已通过 {kh.get('source_label', kh.get('source'))} 核查"
+                               f"{'、'.join(checked)}，无记录。",
                         manual_url=rule.get("manual_url", ""),
                     )
                 )
@@ -139,25 +150,12 @@ def evaluate(
                 results.append(
                     RuleResult(
                         rule_id=rid, title=rule["title"], severity=rule["severity"],
-                        status=RULE_CLEAR,
-                        reason=f"已通过 {kh.get('source_label', kh.get('source'))} 核查"
-                               f"{'、'.join(kh.get('checked') or [])}，无记录。",
+                        status=RULE_UNVERIFIED,
+                        reason=f"数据源 {kh.get('source_label', kh.get('source'))} 未返回可核验范围，"
+                               "不能把空结果当作无记录。",
                         manual_url=rule.get("manual_url", ""),
                     )
                 )
-            continue
-
-        # 1b) 兼容旧形态：exec_or_breach 这种聚合键
-        if rid == "RL-01" and keyed_hits.get("exec_or_breach"):
-            payload = keyed_hits["exec_or_breach"]
-            results.append(
-                RuleResult(
-                    rule_id=rid, title=rule["title"], severity=rule["severity"],
-                    status=RULE_HIT,
-                    reason=f"{payload.get('source_label')} 返回了执行/失信记录；需按案号核对主体一致性。",
-                    evidence=[], manual_url=rule.get("manual_url", ""),
-                )
-            )
             continue
 
         # 2) 公告类规则（RL-08 在美国主体下改走 SEC 申报分支）

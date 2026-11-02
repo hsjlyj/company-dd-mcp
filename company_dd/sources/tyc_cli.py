@@ -33,16 +33,16 @@ from .base import Source, SourceSpec
 TOOLS: dict[str, tuple[str, str, list[str]]] = {
     # key: (cli 子命令, 中文名, 关联红线)
     "search": ("company companies", "企业检索（锚定）", []),
-    "registration": ("company registration-info", "核心登记信息", ["RL-02"]),
+    "registration": ("company registration-info", "核心登记信息", []),
     "change_records": ("company change-records", "历史变更记录", ["RL-05"]),
     "business_exception": ("risk business-exception", "经营异常名录", ["RL-02"]),
     "executed": ("risk judgment-debtor-info", "被执行人", ["RL-01"]),
     "dishonest": ("risk dishonest-info", "失信被执行人", ["RL-01"]),
     "serious_violation": ("risk serious-violation", "严重违法失信", ["RL-02"]),
     "admin_penalty": ("risk administrative-penalty", "行政处罚", ["RL-03"]),
-    "tax_arrears": ("risk tax-arrears-notice", "欠税公告", ["RL-12", "RL-03"]),
+    "tax_arrears": ("risk tax-arrears-notice", "欠税公告", ["RL-03"]),
     "high_consumption": ("risk high-consumption-restriction", "限制高消费", ["RL-01"]),
-    "risk_overview": ("risk overview", "天眼风险总览", ["RL-01", "RL-02"]),
+    "risk_overview": ("risk overview", "天眼风险总览", []),
 }
 
 NOT_LOGGED_IN_MARKERS = ("未配置 Authorization", "tyc init", "请先登录", "unauthorized", "401")
@@ -211,7 +211,9 @@ def rule_hits(collected: dict[str, Any]) -> dict[str, dict[str, Any]]:
             )
             slot["checked"].append(res["label"])
             slot["labels"].append(res["label"])
-            if hits:
+            # 历史变更记录每家存续公司都有，只有达到规则阈值才构成 RL-05 命中。
+            threshold = 3 if tool == "change_records" else 1
+            if len(hits) >= threshold:
                 slot["evidence"].extend(
                     [{"tool": tool, "label": res["label"], "item": h} for h in hits[:5]]
                 )

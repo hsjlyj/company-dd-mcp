@@ -30,7 +30,7 @@
 ```bash
 cd /opt/company-dd
 
-# 0) 首次：装依赖（本机无 pip 时的可行路径）
+# 0) 首次：安装项目与依赖（本机无 pip 时的可行路径）
 bash install.sh
 
 # 1) 看这次能查什么（真发请求，约 5 秒）
@@ -42,6 +42,8 @@ bash install.sh
 # 3) 出完整报告（md/html/json 落在 data/reports/）
 ./bin/company-dd report "宁德时代" --pages 6
 ```
+
+`install.sh` 会以 editable 方式安装本项目，因此 `./bin/company-dd` 和 venv 里的 `company-dd` 命令都可以在任意目录使用；安装冒烟测试默认离线，不会改写 `DATA-SOURCES.json`。
 
 接入 MCP 客户端（Claude Desktop / Cursor / Hermes 等）：
 
@@ -102,12 +104,12 @@ company_dd/
   rules.py         规则引擎（hit / clear / unverified 三态语义 + 结论颜色）
   rules.json       12 条红线的机器可读定义（关键词、阈值、期望、理由）
   report.py        Markdown / HTML（三色仪表盘）/ JSON 渲染
-  server.py        MCP 服务端（8 个工具）
+  server.py        MCP 服务端（10 个工具）
   cli.py           命令行
 tools/
   mcp_handshake.py        协议交接测试（真 stdio 子进程）
-  refresh_data_sources.py 实测刷新 DATA-SOURCES.json
-tests/                     20 个单测，不打网络
+  refresh_data_sources.py 实测刷新 DATA-SOURCES.json（--offline 可离线冒烟）
+tests/                     离线单测，不打网络
 ```
 
 数据流：
@@ -217,7 +219,7 @@ tests/                     20 个单测，不打网络
 
 | 环境变量 | 作用 |
 | --- | --- |
-| `COMPANY_DD_HOME` | 数据目录（默认 `/opt/company-dd/data`）：报告、原始载荷 |
+| `COMPANY_DD_HOME` | 数据目录（默认 `~/.company-dd`；`bin/company-dd` 默认用仓库内 `data/`）：报告、原始载荷 |
 | `COMPANY_DD_TIMEOUT` / `COMPANY_DD_RETRIES` / `COMPANY_DD_HOST_INTERVAL` | 超时、重试、按主机限速 |
 | `COMPANY_DD_UA` | 自定义 UA（SEC 要求声明联系人） |
 | `DEVNORS_API_KEY` | 启用 Devnors 中国工商聚合（字段标 partial） |

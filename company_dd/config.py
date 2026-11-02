@@ -6,6 +6,32 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import __version__
+
+
+def _env_path(name: str, default: Path) -> Path:
+    return Path(os.getenv(name, str(default))).expanduser()
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+
+def _env_int(name: str, default: int) -> int:
+    raw = os.getenv(name)
+    if not raw:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
 DEFAULT_UA = (
     "company-dd-mcp/{ver} (+https://localhost/company-dd; due-diligence research tool; "
     "respects robots and rate limits)"
@@ -16,7 +42,6 @@ KEY_ENV = {
     "opencorporates": "OPENCORPORATES_API_KEY",
     "devnors": "DEVNORS_API_KEY",
     "tianyancha_cli": "TYC_TOKEN",  # 天眼查官方 CLI（tyc login 后写入 ~/.tyc/config.json）
-    "qcc_mcp": "QCC_MCP_TOKEN",
 }
 
 # 已知会被 WAF / 验证码拦住的中国官方站点：不假装能抓，直接如实标记。
@@ -56,16 +81,20 @@ OFFICIAL_CN_SITES = [
 
 @dataclass
 class Config:
-    home: Path = field(default_factory=lambda: Path(os.getenv("COMPANY_DD_HOME", "/opt/company-dd/data")))
-    timeout: float = float(os.getenv("COMPANY_DD_TIMEOUT", "20"))
-    max_retries: int = int(os.getenv("COMPANY_DD_RETRIES", "2"))
-    min_host_interval: float = float(os.getenv("COMPANY_DD_HOST_INTERVAL", "0.8"))
+    home: Path = field(
+        default_factory=lambda: _env_path("COMPANY_DD_HOME", Path.home() / ".company-dd")
+    )
+    timeout: float = field(default_factory=lambda: _env_float("COMPANY_DD_TIMEOUT", 20.0))
+    max_retries: int = field(default_factory=lambda: _env_int("COMPANY_DD_RETRIES", 2))
+    min_host_interval: float = field(
+        default_factory=lambda: _env_float("COMPANY_DD_HOST_INTERVAL", 0.8)
+    )
     user_agent: str = field(default_factory=lambda: os.getenv("COMPANY_DD_UA", "").strip())
     keys: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.user_agent:
-            self.user_agent = DEFAULT_UA.format(ver="0.1.0")
+            self.user_agent = DEFAULT_UA.format(ver=__version__)
         self.keys = {src: os.getenv(env, "").strip() for src, env in KEY_ENV.items()}
         self.home.mkdir(parents=True, exist_ok=True)
         (self.home / "reports").mkdir(parents=True, exist_ok=True)

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from pathlib import Path
@@ -44,9 +45,22 @@ NOT_INCLUDED = [
 ]
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="实测刷新 DATA-SOURCES.json")
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        help="只验证数据源目录可加载，不发请求、不改写 DATA-SOURCES.json（供安装冒烟测试使用）",
+    )
+    args = parser.parse_args(argv)
+
     cfg = Config()
     engine = Engine(cfg)
+    if args.offline:
+        catalog = engine.registry.catalog()
+        print(f"offline ok: {len(catalog)} 个数据源目录可加载；未发请求，未改写 DATA-SOURCES.json")
+        return 0
+
     statuses = engine.registry.probes()
     idx = {s.source_id: s for s in statuses}
     sources = []

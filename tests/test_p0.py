@@ -24,6 +24,39 @@ def test_tyc_rule_hits_distinguishes_clear_from_hit() -> None:
     assert rows["RL-02"]["evidence"] == []
 
 
+def test_tyc_registration_and_single_change_do_not_create_false_hits() -> None:
+    collected = {
+        "registration": {"status": "ok", "label": "核心登记信息", "rules": [], "hits": [{"name": "某公司"}]},
+        "change_records": {
+            "status": "ok",
+            "label": "历史变更记录",
+            "rules": ["RL-05"],
+            "hits": [{"change": "地址变更"}],
+        },
+    }
+
+    rows = rule_hits(collected)
+
+    assert "RL-02" not in rows
+    assert rows["RL-05"]["checked"] == ["历史变更记录"]
+    assert rows["RL-05"]["evidence"] == []
+
+
+def test_tyc_change_records_need_threshold_before_hit() -> None:
+    collected = {
+        "change_records": {
+            "status": "ok",
+            "label": "历史变更记录",
+            "rules": ["RL-05"],
+            "hits": [{"change": "法定代表人"}, {"change": "控股股东"}, {"change": "实际控制人"}],
+        },
+    }
+
+    rows = rule_hits(collected)
+
+    assert len(rows["RL-05"]["evidence"]) == 3
+
+
 def test_tyc_without_login_is_explicit_needs_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     cfg = Config(home=tmp_path)
     src = TycCliSource(cfg, HttpClient(cfg))
