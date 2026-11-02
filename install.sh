@@ -1,31 +1,50 @@
 #!/usr/bin/env bash
-# company-dd 首次安装：本机没有 pip/venv 也能装（用 get-pip.py 给 venv 装 pip）。
+# 首次安装 / 二次修复：建 venv + 以 editable 方式装本项目（含 dev 依赖），并做一次离线冒烟。
+# 设计要点：
+#   * 必须真的安装包本身（editable），否则 ./bin/company-dd 与 MCP 客户端在仓库外无法调用；
+#   * 冒烟测试默认离线（COMPANY_DD_OFFLINE=1），不发起真实网络请求、不改写 DATA-SOURCES.json。
 set -euo pipefail
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PY="${PYTHON:-python3}"
 cd "$ROOT"
 
-echo "== 解释器: $($PY -V 2>&1)"
-if [ ! -x "$ROOT/.venv/bin/python" ]; then
-  echo "== 创建 venv（--without-pip，再用 get-pip 注入 pip）"
-  "$PY" -m venv --without-pip "$ROOT/.venv"
-  curl -sS -o "$ROOT/.venv/get-pip.py" https://bootstrap.pypa.io/get-pip.py
-  "$ROOT/.venv/bin/python" "$ROOT/.venv/get-pip.py" -q
+PYTHON="${PYTHON:-python3}"
+if ! command -v "$PYTHON" >/dev/null 2>&1; then
+  echo "找不到 $PYTHON；请先安装 Python 3.10+" >&2
+  exit 1
 fi
 
-echo "== 安装项目与依赖"
-"$ROOT/.venv/bin/pip" install -q --upgrade pip
-"$ROOT/.venv/bin/pip" install -q -e ".[dev]"
+if [ ! -d .venv ]; then
+  echo "==> 创建虚拟环境 .venv"
+  "$PYTHON" -m venv .venv
+fi
 
-echo "== 冒烟测试（离线）"
-export COMPANY_DD_HOME="${COMPANY_DD_HOME:-$ROOT/data}"
-"$ROOT/.venv/bin/python" -m pytest tests -q
-"$ROOT/.venv/bin/python" tools/refresh_data_sources.py --offline
+VENV_PY="$ROOT/.venv/bin/python"
+if [ ! -x "$VENV_PY" ]; then
+  echo "虚拟环境不可用：$VENV_PY" >&2
+  exit 1
+fi
 
-cat <<EOF
+if [ -z "${COMPANY_DD_SKIP_UPGRADE:-}" ]; then
+  echo "==> 升级 pip（可设 COMPANY_DD_SKIP_UPGRADE=1 跳过）"
+  "$VENV_PY" -m pip install --upgrade pip >/dev/null
+fi
 
-安装完成。下一步：
-  ./bin/company-dd probe
-  ./bin/company-dd report "宁德时代" --pages 6
-  MCP 接入见 README.md 第 2 节
-EOF
+echo "==> 以 editable 方式安装本项目及开发依赖"
+"$VENV_PY" -m pip install -e ".[dev]"
+
+echo "==> 安装校验"
+"$VENV_PY" -c "import company_dd; print('company_dd', company_dd.__file__)"
+
+echo "==> 离线冒烟：刷新数据源清单（--offline，不发真实请求）"
+COMPANY_DD_OFFLINE=1 "$VENV_PY" tools/refresh_data_sources.py --offline
+
+echo "==> 单测"
+"$VENV_PY" -m pytest tests -q
+
+echo
+echo "完成。可用命令："
+echo "  ./bin/company-dd probe"
+echo "  ./bin/company-dd report \"公司全称\" --pages 6"
+echo "  ./bin/company-dd sources"
+echo "  $VENV_PY tools/mcp_handshake.py   # 协议层交接测试"
